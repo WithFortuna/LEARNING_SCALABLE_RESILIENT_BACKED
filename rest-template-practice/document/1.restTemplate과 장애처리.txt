@@ -1,0 +1,48 @@
+ 1. RestTemplate 사용법 공부
+
+- 두 개의 설정 클래스 비교
+    - SimpleRestTemplateConfig — 기본 new RestTemplate() (학습용 비교군)
+    - PracticalRestTemplateConfig — Apache HttpClient 5 기반 실전 설정
+  - 메서드별 클라이언트 분리
+    - GetClient (getForObject, 경로변수, UriComponentsBuilder)
+    - PostClient (postForObject)
+    - PutClient, DeleteClient
+    - OthersClient (HttpEntity, postForEntity, setBearerAuth)
+    - ExceptionHandlingClient (HttpClientErrorException / HttpServerErrorException / RestClientException 분기)
+
+
+2. 장애 핸들링을 위한 타임아웃 관리
+ 3종 타임아웃 + 커넥션 풀까지 모두 다루었습니다.
+
+  ┌────────────────────────────┬─────────┬────────────────────────┐
+  │       타임아웃 종류        │ 운영 값 │          의미          │
+  ├────────────────────────────┼─────────┼────────────────────────┤
+  │ Connection Timeout         │ 1초     │ TCP 연결 수립까지      │
+  ├────────────────────────────┼─────────┼────────────────────────┤
+  │ Response Timeout           │ 3초     │ 응답 수신까지          │
+  ├────────────────────────────┼─────────┼────────────────────────┤
+  │ Connection Request Timeout │ 1초     │ 풀에서 커넥션 획득까지 │
+  └────────────────────────────┴─────────┴────────────────────────┘
+
+  - application.yml에 외부 설정으로 분리 → HttpClientTimeoutProperties로 바인딩
+  - PoolingHttpClientConnectionManager (max 100, perRoute 10)
+  - evictExpiredConnections() + evictIdleConnections(60s)로 좀비 커넥션 정리
+
+
+
+ 3. 지정한 타임아웃을 테스트로 검증.
+
+
+3종 타임아웃이 각각 독립된 테스트로 검증되어 있고, 어서션이 "예외 타입 + 메시지 + 시간 내 발생" 세 축을 모두 잡습니다.
+
+  PracticalRestTemplateConfigTest.java:
+
+  ┌────────────────────────────────────────────────────────────────┬────────────────────────────┬───────────────────────────────────────────────────────────────────────────────────────────────┐
+  │                             테스트                             │         검증 대상          │                                          핵심 어서션                                          │
+  ├────────────────────────────────────────────────────────────────┼────────────────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ apache_client5_response_타임아웃은_설정값에_발생한다 (L87)     │ Response Timeout           │ ResourceAccessException + "Read timed out" + assertTimeoutPreemptively                        │
+  ├────────────────────────────────────────────────────────────────┼────────────────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ apache_client5_connection_타임아웃은_설정값에_발생한다 (L109)  │ Connection Timeout         │ ResourceAccessException + "Connect timed out" (도달 불가 IP 192.167.1.1 사용)                 │
+  ├────────────────────────────────────────────────────────────────┼────────────────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ ..._connectionRequest_타임아웃은_설정값에_발생한다_ver2 (L168) │ Connection Request Timeout │ 풀 사이즈 1 + 첫 요청 점유 + 두 번째 요청 ExecutionException (cause: ResourceAccessException) │
+  └────────────────────────────────────────────────────────────────┴────────────────────────────┴─────────────────────────────────────────────────────────────────────────────────────────────
