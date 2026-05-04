@@ -1,0 +1,11 @@
+spring:
+  application:
+    name: rest-template-practice
+
+
+timeout:
+  response: 3 # sec
+  connection: 1
+  request-connection: 1
+  pool-max-total: 100
+  pool-max-per-route: 10
