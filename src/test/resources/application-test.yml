@@ -1,0 +1,6 @@
+timeout:
+  response: 15 # sec
+  connection: 1
+  request-connection: 1
+  pool-max-total: 10
+  pool-max-per-route: 1
